@@ -1,0 +1,70 @@
+name: Store Scrapers
+
+# schedule and workflow_dispatch only. Never pull_request or
+# pull_request_target — this repo is public, and a fork PR must never be able
+# to run with repository secrets in scope.
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: 'Seed state without sending alerts'
+        type: boolean
+        default: false
+      only:
+        description: 'Comma-separated source names, blank for all'
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stores
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/node/package-lock.json
+
+      - name: Install dependencies
+        working-directory: src/node
+        run: npm ci
+
+      - name: Install Playwright chromium
+        working-directory: src/node
+        run: npx playwright install --with-deps chromium
+
+      - name: Run store pass
+        working-directory: src/node
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # Inputs go through the environment, never interpolated straight into
+          # the script: `${{ inputs.only }}` inline would let a dispatcher inject
+          # shell through the input box.
+          SEED_INPUT: ${{ inputs.seed }}
+          ONLY_INPUT: ${{ inputs.only }}
+        run: |
+          ARGS=""
+          if [ "$SEED_INPUT" = "true" ]; then ARGS="$ARGS --seed"; fi
+          if [ -n "$ONLY_INPUT" ]; then ARGS="$ARGS --only $ONLY_INPUT"; fi
+          npx tsx bin/stores.ts $ARGS
+
+      # Block scalar, not an inline one: the ": " inside the commit message
+      # would otherwise be parsed as a YAML mapping and fail the workflow.
+      - name: Commit state
+        run: |
+          bash scripts/commit-state.sh main "chore(state): store pass $(date -u +%Y-%m-%dT%H:%MZ)"

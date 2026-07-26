@@ -1,0 +1,12 @@
+# The worker writes state with LF and rewrites it in full every pass. With
+# core.autocrlf on Windows, a CRLF checkout would make every pass a whole-file
+# diff — and would rewrite the append-only price history end to end. Pin LF.
+state/**/*.json text eol=lf
+state/**/*.jsonl text eol=lf
+state/*.json     text eol=lf
+
+# Same reasoning for the worker sources and the shell script, which runs on
+# ubuntu runners where CRLF would break the shebang.
+src/node/**/*.ts   text eol=lf
+src/node/**/*.json text eol=lf
+scripts/*.sh       text eol=lf

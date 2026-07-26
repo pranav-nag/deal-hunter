@@ -1,0 +1,16 @@
+# Node
+src/node/node_modules/
+npm-debug.log*
+
+# Scratch state written by the price-store round-trip test
+state/prices/testsource*.jsonl
+
+# Playwright
+/playwright-report/
+/test-results/
+
+# IDEs & System files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
