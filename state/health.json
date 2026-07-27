@@ -1,7 +1,63 @@
 {
-  "GameLoot": {
+  "AmazonIn": {
     "consecutiveFailures": 0,
+    "lastOkAt": 1785139832948,
+    "status": "ok"
+  },
+  "CexIndia": {
+    "consecutiveFailures": 0,
+    "lastOkAt": 1785139832948,
+    "status": "ok"
+  },
+  "ConsoleGarage": {
+    "consecutiveFailures": 0,
+    "lastOkAt": 1785139832948,
+    "status": "ok"
+  },
+  "Dacby": {
+    "consecutiveFailures": 1,
+    "lastError": "blocked by robots.txt",
+    "lastOkAt": 0,
+    "status": "degraded"
+  },
+  "E2ZStore": {
+    "consecutiveFailures": 1,
+    "lastError": "no successful fetch",
+    "lastOkAt": 0,
+    "status": "degraded"
+  },
+  "GameLoot": {
+    "consecutiveFailures": 1,
+    "lastError": "HTTP 403",
     "lastOkAt": 1785000942017,
+    "status": "degraded"
+  },
+  "GameNation": {
+    "consecutiveFailures": 1,
+    "lastError": "HTTP 403",
+    "lastOkAt": 0,
+    "status": "degraded"
+  },
+  "GamesTheShop": {
+    "consecutiveFailures": 0,
+    "lastOkAt": 1785139832948,
+    "status": "ok"
+  },
+  "HGWorld": {
+    "consecutiveFailures": 1,
+    "lastError": "blocked by robots.txt",
+    "lastOkAt": 0,
+    "status": "degraded"
+  },
+  "Nekavo": {
+    "consecutiveFailures": 1,
+    "lastError": "fetch failed",
+    "lastOkAt": 0,
+    "status": "degraded"
+  },
+  "PlayAsia": {
+    "consecutiveFailures": 0,
+    "lastOkAt": 1785139832948,
     "status": "ok"
   }
 }
