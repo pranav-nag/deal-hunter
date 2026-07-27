@@ -48,7 +48,12 @@ jobs:
         working-directory: src/node
         run: npx playwright install --with-deps chromium
 
+      # Shorter than the job timeout on purpose. A hung pass then fails this
+      # step while the job survives, so the commit below still runs and keeps
+      # whatever state was already written. A job-level timeout would take the
+      # commit with it.
       - name: Run store pass
+        timeout-minutes: 20
         working-directory: src/node
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -68,6 +73,12 @@ jobs:
 
       # Block scalar, not an inline one: the ": " inside the commit message
       # would otherwise be parsed as a YAML mapping and fail the workflow.
+      #
+      # always(), because uncommitted state is worse than partial state. Each
+      # source writes its own files as it finishes, so a pass that dies halfway
+      # still has real results on disk; without this they are thrown away and
+      # the next pass re-diffs against a stale snapshot and re-alerts everything.
       - name: Commit state
+        if: always()
         run: |
           bash scripts/commit-state.sh main "chore(state): store pass $(date -u +%Y-%m-%dT%H:%MZ)"
