@@ -27,7 +27,10 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # A full pass measured ~22 minutes of real work: 12 sources in parallel, but
+    # queries within a source are sequential so the per-host politeness delay in
+    # fetch.ts applies. Leave headroom above that, and above the step timeout.
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v4
@@ -52,8 +55,11 @@ jobs:
       # step while the job survives, so the commit below still runs and keeps
       # whatever state was already written. A job-level timeout would take the
       # commit with it.
+      #
+      # Must stay comfortably above the ~22 minutes a real pass takes. Set to 20
+      # once, which killed a healthy pass two minutes from the finish line.
       - name: Run store pass
-        timeout-minutes: 20
+        timeout-minutes: 30
         working-directory: src/node
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
