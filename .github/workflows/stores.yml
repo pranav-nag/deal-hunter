@@ -52,6 +52,9 @@ jobs:
         working-directory: src/node
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # Optional. Unset means digest and system messages fall back to the
+          # deals webhook rather than going missing.
+          DISCORD_DIGEST_WEBHOOK_URL: ${{ secrets.DISCORD_DIGEST_WEBHOOK_URL }}
           # Inputs go through the environment, never interpolated straight into
           # the script: `${{ inputs.only }}` inline would let a dispatcher inject
           # shell through the input box.

@@ -26,6 +26,13 @@ cd src/node && npx tsc --noEmit && npm test
 cd src/node && npx tsx bin/stores.ts --only GameLoot --seed
 ```
 
+```bash
+cd src/node && npx tsx bin/digest.ts
+```
+
+The digest reads committed state and posts; it writes nothing, which is why it
+can run on its own schedule without colliding with a scrape pass.
+
 `--seed` writes state and emits nothing. `--only A,B` limits sources. Both
 omitted means a full live pass across every source.
 
@@ -48,8 +55,9 @@ so tests alone will happily pass on code that does not compile.
   what makes concurrent workflow runs safe without locking.
 - **Scrapers must never throw.** Every failure path returns a `ScrapeOutcome`
   with `ok: false`. A thrown scraper takes down the whole pass.
-- **No secrets in code.** `DISCORD_WEBHOOK_URL` comes from the environment only;
-  unset means mock mode (prints to stdout).
+- **No secrets in code.** `DISCORD_WEBHOOK_URL` and the optional
+  `DISCORD_DIGEST_WEBHOOK_URL` come from the environment only; unset means mock
+  mode (prints to stdout). The digest webhook falls back to the deals one.
 
 ## Vendored code
 
@@ -78,6 +86,35 @@ behaviour and note the difference. Do not change the vendored logic.
 
 Matching, diffing, health, pruning and Discord are source-agnostic. Adding a
 source should require no change to any of them.
+
+## Alerting
+
+Three layers stand between a scraped listing and the user's phone. Adding a
+fourth kind of alert means passing it through all three, not around them.
+
+- **The gate** (`src/node/events/gate.ts`) decides whether one listing is worth
+  an interruption: wanted, in stock, priced in INR, condition allowed, at or
+  under `targetPaise`, and at least 5% better than whatever we last alerted for
+  that listing. Pure and total — it returns a `GateReason` even when it passes,
+  because the digest explains why things stayed quiet.
+- **`conditionPolicy: 'sealed-only'`** is not a preference. It marks the titles
+  whose value sits in a one-time code, where a cheap used listing is a trap. It
+  rejects `unknown` condition as well as `preowned`; under a price-only rule
+  those listings would be the *loudest* alerts sent.
+- **The circuit breaker** (`src/node/events/breaker.ts`) judges the pass, not the
+  listing. Over 8 alerts, or one source re-reporting over half its catalogue as
+  new, means listing keys changed — every alert individually valid, the batch
+  obviously wrong. It suppresses and posts one summary. Suppressed events are
+  still recorded in state and still appear in the digest.
+
+`lastAlertedPricePaise` is written by `recordAlerts()` *after* Discord accepts
+the message, never at diff time. Recording earlier would mark breaker-suppressed
+deals as already-announced and mute them permanently. A failed send therefore
+re-alerts next pass, which is the right failure direction.
+
+A wanted game with no `targetPaise` can never alert. `gamesMissingTarget()`
+reports these on every pass and in the digest — otherwise a missing target reads
+as "no deals" rather than as a config gap.
 
 ## Two things that are load-bearing, not decoration
 

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { diffPass } from '../events/diff.ts';
 import type { ListingsFile, StoredListing } from '../state/listings.ts';
+import type { WishlistGame } from '../state/wishlist.ts';
 
 const NOW = 1_774_454_400_000;
 
@@ -20,12 +21,20 @@ const stored = (over: Partial<StoredListing> = {}): StoredListing => ({
   ...base(), firstSeen: NOW - 5000, lastSeen: NOW - 1000, missedPasses: 0, ...over,
 });
 
-const run = (opts: Partial<Parameters<typeof diffPass>[0]>) => diffPass({
-  source: 'TestStore', previous: prevFile({}), scraped: [], now: NOW,
-  seed: false, ownedSlugs: new Set<string>(), ...opts,
+const game = (over: Partial<WishlistGame> = {}): WishlistGame => ({
+  slug: 'titanfall-2', title: 'Titanfall 2', platform: 'ps4', status: 'wanted',
+  targetPaise: 60000, aliases: [], ...over,
 });
 
-test('an unseen listing is a new_listing and alerts', () => {
+const games = (...list: WishlistGame[]) =>
+  new Map((list.length > 0 ? list : [game()]).map((g) => [g.slug, g]));
+
+const run = (opts: Partial<Parameters<typeof diffPass>[0]>) => diffPass({
+  source: 'TestStore', previous: prevFile({}), scraped: [], now: NOW,
+  seed: false, gamesBySlug: games(), ...opts,
+});
+
+test('an unseen listing under target is a new_listing and alerts', () => {
   const { events } = run({ scraped: [{ key: 'k1', listing: base() }] });
   assert.equal(events.length, 1);
   assert.equal(events[0].kind, 'new_listing');
@@ -40,11 +49,11 @@ test('seed mode emits no alerts but still writes state', () => {
 
 test('a lower price is a price_drop carrying the previous price', () => {
   const { events } = run({
-    previous: prevFile({ k1: stored({ pricePaise: 60000 }) }),
+    previous: prevFile({ k1: stored({ pricePaise: 58000 }) }),
     scraped: [{ key: 'k1', listing: base({ pricePaise: 50000 }) }],
   });
   assert.equal(events[0].kind, 'price_drop');
-  assert.equal(events[0].previousPricePaise, 60000);
+  assert.equal(events[0].previousPricePaise, 58000);
   assert.equal(events[0].alert, true);
 });
 
@@ -77,12 +86,13 @@ test('an unchanged listing produces no event and no price point', () => {
 
 test('owned games are recorded but never alerted', () => {
   const { events } = run({
-    previous: prevFile({ k1: stored({ pricePaise: 60000 }) }),
+    previous: prevFile({ k1: stored({ pricePaise: 58000 }) }),
     scraped: [{ key: 'k1', listing: base({ pricePaise: 50000 }) }],
-    ownedSlugs: new Set(['titanfall-2']),
+    gamesBySlug: games(game({ status: 'owned', targetPaise: undefined })),
   });
   assert.equal(events[0].kind, 'price_drop');
   assert.equal(events[0].alert, false);
+  assert.equal(events[0].gateReason, 'not_wanted');
 });
 
 test('pending matches are recorded but not live-alerted', () => {
@@ -90,6 +100,71 @@ test('pending matches are recorded but not live-alerted', () => {
     scraped: [{ key: 'k1', listing: base({ matchStatus: 'pending', matchScore: 0.7 }) }],
   });
   assert.equal(events[0].alert, false);
+  assert.equal(events[0].gateReason, 'match_not_auto');
+});
+
+test('a listing over target is recorded but does not alert', () => {
+  const { events } = run({ scraped: [{ key: 'k1', listing: base({ pricePaise: 90000 }) }] });
+  assert.equal(events[0].kind, 'new_listing');
+  assert.equal(events[0].alert, false);
+  assert.equal(events[0].gateReason, 'over_target');
+});
+
+test('a wanted game with no target can never alert', () => {
+  const { events } = run({
+    scraped: [{ key: 'k1', listing: base() }],
+    gamesBySlug: games(game({ targetPaise: undefined })),
+  });
+  assert.equal(events[0].alert, false);
+  assert.equal(events[0].gateReason, 'no_target');
+});
+
+test('a pre-owned listing for a sealed-only game does not alert at any price', () => {
+  const { events } = run({
+    scraped: [{ key: 'k1', listing: base({ pricePaise: 1000, condition: 'preowned' }) }],
+    gamesBySlug: games(game({ conditionPolicy: 'sealed-only' })),
+  });
+  assert.equal(events[0].alert, false);
+  assert.equal(events[0].gateReason, 'condition_blocked');
+});
+
+test('a listing already alerted does not re-alert on a trivial dip', () => {
+  const { events } = run({
+    previous: prevFile({ k1: stored({ pricePaise: 50000, lastAlertedPricePaise: 50000 }) }),
+    scraped: [{ key: 'k1', listing: base({ pricePaise: 49000 }) }],
+  });
+  assert.equal(events[0].kind, 'price_drop');
+  assert.equal(events[0].alert, false);
+  assert.equal(events[0].gateReason, 'not_better_than_last_alert');
+});
+
+test('a listing already alerted re-alerts once it beats the last alert by 5%', () => {
+  const { events } = run({
+    previous: prevFile({ k1: stored({ pricePaise: 50000, lastAlertedPricePaise: 50000 }) }),
+    scraped: [{ key: 'k1', listing: base({ pricePaise: 47000 }) }],
+  });
+  assert.equal(events[0].alert, true);
+});
+
+test('lastAlerted is carried into the next state, not reset by a rescrape', () => {
+  const { next } = run({
+    previous: prevFile({ k1: stored({ lastAlertedPricePaise: 50000, lastAlertedAt: 42 }) }),
+    scraped: [{ key: 'k1', listing: base({ pricePaise: 48000 }) }],
+  });
+  assert.equal(next.listings.k1.lastAlertedPricePaise, 50000);
+  assert.equal(next.listings.k1.lastAlertedAt, 42);
+});
+
+test('an out-of-stock listing under target does not alert', () => {
+  const { events } = run({ scraped: [{ key: 'k1', listing: base({ inStock: false }) }] });
+  assert.equal(events[0].alert, false);
+  assert.equal(events[0].gateReason, 'out_of_stock');
+});
+
+test('an import priced in another currency does not alert', () => {
+  const { events } = run({ scraped: [{ key: 'k1', listing: base({ currency: 'USD' }) }] });
+  assert.equal(events[0].alert, false);
+  assert.equal(events[0].gateReason, 'foreign_currency');
 });
 
 test('an absent listing increments missedPasses and reports gone at three', () => {
@@ -119,7 +194,7 @@ test('firstSeen is preserved and lastSeen advances', () => {
 
 test('a price change writes exactly one price point', () => {
   const { pricePoints } = run({
-    previous: prevFile({ k1: stored({ pricePaise: 60000 }) }),
+    previous: prevFile({ k1: stored({ pricePaise: 58000 }) }),
     scraped: [{ key: 'k1', listing: base({ pricePaise: 50000 }) }],
   });
   assert.deepEqual(pricePoints, [{ ts: NOW, key: 'k1', pricePaise: 50000, inStock: true }]);

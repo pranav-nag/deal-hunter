@@ -4,7 +4,7 @@ Context for picking this project up in a fresh session. Read this first, then
 [`README.md`](README.md) for how to run it, then the spec for why it is shaped
 this way.
 
-**Last updated:** 2026-07-26
+**Last updated:** 2026-07-27
 
 ---
 
@@ -20,7 +20,7 @@ It was extracted from a private repo that also hosts an unrelated Python bot.
 scrapers were vendored from a local `ps-collector` project (Next.js + SQLite)
 which only ran on localhost; this repo is the always-on replacement.
 
-## Current status: phase 1 complete
+## Current status: phase 1 complete, phase 3 built
 
 Everything below is built, tested and committed.
 
@@ -40,21 +40,53 @@ Everything below is built, tested and committed.
 | Pass orchestrator + CLI | `src/node/pass.ts`, `src/node/bin/stores.ts` | done |
 | Pruning | `src/node/state/prune.ts` | done |
 | State commit script | `scripts/commit-state.sh` | done |
-| Workflow | `.github/workflows/stores.yml` | written and YAML-validated, **never run** |
+| Workflow | `.github/workflows/stores.yml` | written and YAML-validated |
+| Alert gate | `src/node/events/gate.ts` | done |
+| Circuit breaker | `src/node/events/breaker.ts` | done |
+| Daily digest + workflow | `src/node/digest/`, `.github/workflows/digest.yml` | done, **never run in CI** |
 
-**Verification as of last session:** `npx tsc --noEmit` clean, `npm test` 87
+**Verification as of last session:** `npx tsc --noEmit` clean, `npm test` 149
 passing, 0 failing.
 
 **Live proof it works:** `npx tsx bin/stores.ts --seed --only GameLoot` returned
 `sources=1 events=180 alerts=0` and wrote 180 listings (52 auto-matched,
 99 pending, 25 unmatched), health `ok`. That seeded state is committed.
 
+## The alert flood, and what fixed it (2026-07-27)
+
+The first live pass across the 11 newly-seeded sources flooded Discord. Seed
+suppression covered run 1; run 2 then emitted `new_listing` for everything the
+seed pass had not happened to return.
+
+The root cause was not seeding. The alert rule was "matched, and not a game we
+own" — no price check at all, so a ₹4,999 Horizon alerted identically to a
+₹1,450 one, once per store, one HTTP POST per event.
+
+Replaying the committed 180-listing GameLoot catalogue as if every listing were
+new — the exact flood shape — measures each layer:
+
+| Stage | Messages |
+|---|---|
+| Old rule | 23 (from one store) |
+| After the gate | 2 |
+| After grouping by game | 2 embeds |
+| After the circuit breaker | 0 sent, 1 summary — correctly read 180/180 new as key churn |
+
+The two survivors were Horizon Zero Dawn Remastered at ₹1,399 against a ₹1,699
+target and Clair Obscur sealed at ₹3,199 against ₹3,500. Both are real buys.
+
+See the Alerting section of [`CLAUDE.md`](CLAUDE.md) for how the three layers
+work and which rules must not be routed around.
+
 ## Immediate next steps
 
 1. **Create the GitHub repo and push.** Nothing has been pushed yet.
 2. **Add the `DISCORD_WEBHOOK_URL` secret** in repo Settings → Secrets and
    variables → Actions. Without it the workflow runs in mock mode and posts
-   nothing.
+   nothing. Add **`DISCORD_DIGEST_WEBHOOK_URL`** too, pointed at a second,
+   notifications-off channel — that is what keeps the deals channel to buy
+   alerts only. Unset, digest and system messages fall back to the deals
+   webhook and the separation is lost.
 3. **Seed the remaining 11 sources before any live pass.** Run the workflow with
    `seed=true`, once per source or all at once:
    ```
@@ -75,7 +107,18 @@ passing, 0 failing.
   `broken` and Discord gets a broken-source alert after 3 consecutive failures.
 - **Match quality is mediocre by design.** In the GameLoot seed, 99 of 180 were
   `pending` — recorded but never alerted. Wrong-platform and wrong-edition
-  listings land here on purpose. The daily digest (phase 3) is what surfaces them.
+  listings land here on purpose. The daily digest surfaces them for confirmation.
+
+- **Two wanted games still have no `targetPaise`** and therefore cannot alert:
+  `the-last-of-us-part-2` and `fallout-4-goty`. Neither appears in §7 of the
+  collection doc. They are reported on every pass and in the digest rather than
+  going quietly silent. Set a target or drop them.
+
+- **The wishlist disagreed with the collection doc and now follows it.** The doc
+  records The Evil Within (₹1,100) and Fallout 4 (₹1,400) as bought; the wishlist
+  had The Evil Within as `wanted` and no Fallout 4 base entry at all. Both are
+  now `owned`, so the counts are 21 owned / 15 wanted, not 19 / 16. A
+  wanted-but-owned game alerts on deals for something already on the shelf.
 - **Console bundles can auto-match.** A PS4 console bundle *including* MGSV
   matched at 0.854 and would alert at hardware pricing. Not fixed. Consider a
   price-sanity check or a bundle-token penalty in the matcher.
@@ -170,9 +213,11 @@ Not started. Each needs its own plan written before code.
   (geo-blocking from cloud runners, bot protection); reopening it means solving
   those, not assuming they lapsed. See "Adding a source" in the spec — the
   contracts are already source-agnostic.
-- **Phase 3 — digest workflow.** Daily 03:30 UTC job that reads all state and
-  reports `pending` matches and recorded-but-unalerted events. This is what makes
-  the 99 pending listings useful.
+- **Phase 3 — digest workflow. Built 2026-07-27, never run in CI.**
+  `.github/workflows/digest.yml` at 03:30 UTC. Reads all state, writes nothing,
+  posts one message: a per-tier board of the best current price for every wanted
+  game, near misses within 10% of target, unconfirmed `pending` matches, wanted
+  games with no target, and unhealthy sources.
 - **Phase 4 — `ps-collector` sync.** Import script reading committed state from
   `raw.githubusercontent.com` into the existing SQLite schema; its local worker
   gets disabled.

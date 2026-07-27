@@ -1,0 +1,45 @@
+name: Daily Digest
+
+# schedule and workflow_dispatch only, same rule as the scrape workflow: this
+# repo is public, and a fork PR must never run with repository secrets in scope.
+on:
+  schedule:
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+# The digest only reads committed state and posts to Discord. It writes nothing
+# and commits nothing, so it needs no write permission and cannot collide with a
+# scrape pass running at the same time.
+permissions:
+  contents: read
+
+concurrency:
+  group: digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/node/package-lock.json
+
+      - name: Install dependencies
+        working-directory: src/node
+        run: npm ci
+
+      - name: Post digest
+        working-directory: src/node
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_DIGEST_WEBHOOK_URL: ${{ secrets.DISCORD_DIGEST_WEBHOOK_URL }}
+        run: npx tsx bin/digest.ts
