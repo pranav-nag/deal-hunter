@@ -1,68 +1,67 @@
 {
   "AmazonIn": {
     "consecutiveFailures": 0,
-    "lastOkAt": 1785807909425,
+    "lastOkAt": 1785831803336,
     "status": "ok"
   },
   "CexIndia": {
     "consecutiveFailures": 0,
-    "lastOkAt": 1785807909425,
+    "lastOkAt": 1785831803336,
     "status": "ok"
   },
   "ConsoleGarage": {
     "consecutiveFailures": 0,
-    "lastOkAt": 1785807909425,
+    "lastOkAt": 1785831803336,
     "status": "ok"
   },
   "Dacby": {
-    "consecutiveFailures": 33,
+    "consecutiveFailures": 34,
     "lastError": "blocked by robots.txt",
     "lastOkAt": 0,
     "status": "broken"
   },
   "E2ZStore": {
-    "consecutiveFailures": 33,
+    "consecutiveFailures": 34,
     "lastError": "no successful fetch",
     "lastOkAt": 0,
     "status": "broken"
   },
   "Flipkart": {
     "consecutiveFailures": 0,
-    "lastOkAt": 1785807909425,
+    "lastOkAt": 1785831803336,
     "status": "ok"
   },
   "GameLoot": {
-    "consecutiveFailures": 33,
+    "consecutiveFailures": 34,
     "lastError": "HTTP 403",
     "lastOkAt": 1785000942017,
     "status": "broken"
   },
   "GameNation": {
-    "consecutiveFailures": 33,
+    "consecutiveFailures": 34,
     "lastError": "HTTP 404",
     "lastOkAt": 0,
     "status": "broken"
   },
   "GamesTheShop": {
     "consecutiveFailures": 0,
-    "lastOkAt": 1785807909425,
+    "lastOkAt": 1785831803336,
     "status": "ok"
   },
   "HGWorld": {
-    "consecutiveFailures": 33,
+    "consecutiveFailures": 34,
     "lastError": "blocked by robots.txt",
     "lastOkAt": 0,
     "status": "broken"
   },
   "Nekavo": {
-    "consecutiveFailures": 2,
-    "lastError": "fetch failed",
-    "lastOkAt": 1785766741498,
-    "status": "degraded"
+    "consecutiveFailures": 0,
+    "lastOkAt": 1785831803336,
+    "status": "ok"
   },
   "PlayAsia": {
     "consecutiveFailures": 0,
-    "lastOkAt": 1785807909425,
+    "lastOkAt": 1785831803336,
     "status": "ok"
   }
 }
